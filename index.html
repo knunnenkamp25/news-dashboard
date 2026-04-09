@@ -1,0 +1,595 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>News Intelligence Dashboard</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+  <style>
+    :root {
+      --navy:    #1a2744;
+      --blue:    #2d4a8a;
+      --accent:  #4a90d9;
+      --light:   #f4f6fb;
+      --border:  #dde3f0;
+      --text:    #1c2340;
+      --muted:   #6b7a99;
+      --green:   #2ecc71;
+      --card-bg: #ffffff;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: "Segoe UI", Arial, sans-serif;
+      background: var(--light);
+      color: var(--text);
+      font-size: 14px;
+    }
+
+    /* ── Header ── */
+    header {
+      background: var(--navy);
+      color: #fff;
+      padding: 18px 32px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      box-shadow: 0 2px 8px rgba(0,0,0,.3);
+    }
+    header h1 { font-size: 1.35rem; font-weight: 700; letter-spacing: .5px; }
+    header .sub { font-size: .8rem; color: #a0b0cc; margin-top: 2px; }
+    #last-updated { font-size: .78rem; color: #8090b0; text-align: right; }
+
+    /* ── Layout ── */
+    main { max-width: 1400px; margin: 0 auto; padding: 24px 24px 48px; }
+
+    /* ── Stat cards ── */
+    .stats-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 16px;
+      margin-bottom: 28px;
+    }
+    .stat-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 18px 20px;
+      text-align: center;
+    }
+    .stat-card .num {
+      font-size: 2rem;
+      font-weight: 700;
+      color: var(--blue);
+      line-height: 1;
+    }
+    .stat-card .lbl { font-size: .78rem; color: var(--muted); margin-top: 6px; text-transform: uppercase; letter-spacing: .5px; }
+
+    /* ── Section headers ── */
+    .section-title {
+      font-size: 1rem;
+      font-weight: 700;
+      color: var(--navy);
+      margin-bottom: 14px;
+      padding-bottom: 8px;
+      border-bottom: 2px solid var(--accent);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    /* ── Charts row ── */
+    .charts-row {
+      display: grid;
+      grid-template-columns: 2fr 1fr 1fr;
+      gap: 20px;
+      margin-bottom: 28px;
+    }
+    @media (max-width: 1000px) { .charts-row { grid-template-columns: 1fr; } }
+    .chart-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 20px;
+    }
+    .chart-card canvas { max-height: 260px; }
+
+    /* ── Keyword + Universe table ── */
+    .kw-section {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 20px;
+      margin-bottom: 28px;
+    }
+    .kw-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+    }
+    @media (max-width: 800px) { .kw-grid { grid-template-columns: 1fr; } }
+
+    table { width: 100%; border-collapse: collapse; }
+    thead th {
+      background: var(--navy);
+      color: #fff;
+      padding: 9px 12px;
+      text-align: left;
+      font-size: .78rem;
+      letter-spacing: .4px;
+      text-transform: uppercase;
+    }
+    tbody tr:nth-child(even) { background: var(--light); }
+    tbody td { padding: 8px 12px; border-bottom: 1px solid var(--border); }
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 99px;
+      font-size: .72rem;
+      font-weight: 600;
+    }
+    .badge-blue  { background: #dbeafe; color: #1e40af; }
+    .badge-green { background: #dcfce7; color: #166534; }
+    .badge-amber { background: #fef9c3; color: #854d0e; }
+
+    /* ── Article feed ── */
+    .feed-controls {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+    .feed-controls input, .feed-controls select {
+      padding: 8px 12px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font-size: .88rem;
+      outline: none;
+      background: #fff;
+    }
+    .feed-controls input { flex: 1; min-width: 220px; }
+    .feed-controls input:focus, .feed-controls select:focus { border-color: var(--accent); }
+    #article-count { font-size: .82rem; color: var(--muted); }
+
+    .articles-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+      gap: 16px;
+    }
+    .article-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 16px 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      transition: box-shadow .15s;
+    }
+    .article-card:hover { box-shadow: 0 4px 16px rgba(45,74,138,.12); }
+    .article-card .art-title {
+      font-weight: 600;
+      font-size: .92rem;
+      color: var(--navy);
+      line-height: 1.4;
+    }
+    .article-card .art-title a {
+      color: inherit; text-decoration: none;
+    }
+    .article-card .art-title a:hover { color: var(--accent); text-decoration: underline; }
+    .article-card .art-meta {
+      font-size: .75rem;
+      color: var(--muted);
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .article-card .art-body {
+      font-size: .82rem;
+      color: #444;
+      line-height: 1.55;
+      display: -webkit-box;
+      -webkit-line-clamp: 3;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+    .source-tag {
+      display: inline-block;
+      padding: 2px 8px;
+      background: #e8edf8;
+      color: var(--blue);
+      border-radius: 99px;
+      font-size: .7rem;
+      font-weight: 600;
+    }
+
+    /* ── Loading / empty states ── */
+    .loading {
+      text-align: center;
+      padding: 60px 20px;
+      color: var(--muted);
+      font-size: .95rem;
+    }
+    .spinner {
+      width: 36px; height: 36px;
+      border: 3px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin .7s linear infinite;
+      margin: 0 auto 12px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>📰 News Intelligence Dashboard</h1>
+    <div class="sub">Local news monitoring · powered by Claude scraper</div>
+  </div>
+  <div id="last-updated">Loading…</div>
+</header>
+
+<main>
+  <!-- Stat cards -->
+  <div class="stats-row">
+    <div class="stat-card"><div class="num" id="stat-articles">–</div><div class="lbl">Total Articles</div></div>
+    <div class="stat-card"><div class="num" id="stat-sources">–</div><div class="lbl">Sources</div></div>
+    <div class="stat-card"><div class="num" id="stat-days">–</div><div class="lbl">Days Covered</div></div>
+    <div class="stat-card"><div class="num" id="stat-keywords">–</div><div class="lbl">Unique Keywords</div></div>
+    <div class="stat-card"><div class="num" id="stat-top-kw" style="font-size:1.1rem; padding-top:6px">–</div><div class="lbl">Top Keyword</div></div>
+  </div>
+
+  <!-- Charts -->
+  <div class="charts-row">
+    <div class="chart-card">
+      <div class="section-title">📅 Articles Over Time</div>
+      <canvas id="timelineChart"></canvas>
+    </div>
+    <div class="chart-card">
+      <div class="section-title">📡 Coverage by Source</div>
+      <canvas id="sourceChart"></canvas>
+    </div>
+    <div class="chart-card">
+      <div class="section-title">🔑 Top Keywords</div>
+      <canvas id="keywordChart"></canvas>
+    </div>
+  </div>
+
+  <!-- Keywords + Universe matching -->
+  <div class="kw-section">
+    <div class="section-title">🎯 Keywords × Voter Targeting Universes</div>
+    <div class="kw-grid">
+      <div>
+        <table id="kw-universe-table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Keyword</th>
+              <th>Count</th>
+              <th>Best-Match Universe</th>
+              <th>Match</th>
+            </tr>
+          </thead>
+          <tbody id="kw-universe-tbody">
+            <tr><td colspan="5" class="loading"><div class="spinner"></div>Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div>
+        <table id="universe-summary-table">
+          <thead>
+            <tr>
+              <th>Universe</th>
+              <th>Matched Keywords</th>
+            </tr>
+          </thead>
+          <tbody id="universe-summary-tbody">
+            <tr><td colspan="2" style="padding:12px;color:#999">Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Article feed -->
+  <div>
+    <div class="section-title">📄 Article Feed</div>
+    <div class="feed-controls">
+      <input type="text" id="search-input" placeholder="Search titles, text, authors…" oninput="filterArticles()" />
+      <select id="source-filter" onchange="filterArticles()">
+        <option value="">All sources</option>
+      </select>
+      <select id="date-filter" onchange="filterArticles()">
+        <option value="">All dates</option>
+      </select>
+      <span id="article-count"></span>
+    </div>
+    <div id="articles-container" class="articles-grid">
+      <div class="loading"><div class="spinner"></div>Loading articles…</div>
+    </div>
+  </div>
+</main>
+
+<script>
+// ─────────────────────────────────────────────────────────────────────────────
+// Data loading
+// ─────────────────────────────────────────────────────────────────────────────
+let ALL_ARTICLES = [];
+let KEYWORDS     = [];
+let META         = {};
+
+async function loadData() {
+  try {
+    const resp = await fetch('data/articles.json');
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const data = await resp.json();
+
+    ALL_ARTICLES = data.articles || [];
+    KEYWORDS     = data.keywords || [];
+    META         = data.meta    || {};
+
+    renderAll();
+  } catch (e) {
+    document.getElementById('articles-container').innerHTML =
+      `<div class="loading" style="color:#c0392b">⚠️ Could not load data/articles.json<br><small>${e.message}</small></div>`;
+    document.getElementById('last-updated').textContent = 'No data loaded';
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Master render
+// ─────────────────────────────────────────────────────────────────────────────
+function renderAll() {
+  renderStats();
+  renderTimeline();
+  renderSourceChart();
+  renderKeywordChart();
+  renderKwUniverseTable();
+  renderArticles(ALL_ARTICLES);
+  populateFilters();
+  document.getElementById('last-updated').textContent =
+    META.generated_at ? `Updated: ${new Date(META.generated_at).toLocaleString()}` : '';
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Stats
+// ─────────────────────────────────────────────────────────────────────────────
+function renderStats() {
+  const sources  = new Set(ALL_ARTICLES.map(a => a.source_site)).size;
+  const dates    = new Set(ALL_ARTICLES.map(a => a.date_published).filter(Boolean)).size;
+  const topKw    = KEYWORDS.length ? KEYWORDS[0].word : '–';
+
+  document.getElementById('stat-articles').textContent = ALL_ARTICLES.length.toLocaleString();
+  document.getElementById('stat-sources').textContent  = sources;
+  document.getElementById('stat-days').textContent     = dates;
+  document.getElementById('stat-keywords').textContent = KEYWORDS.length.toLocaleString();
+  document.getElementById('stat-top-kw').textContent   = topKw;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Timeline chart
+// ─────────────────────────────────────────────────────────────────────────────
+function renderTimeline() {
+  const counts = {};
+  ALL_ARTICLES.forEach(a => {
+    if (a.date_published) counts[a.date_published] = (counts[a.date_published] || 0) + 1;
+  });
+  const labels = Object.keys(counts).sort();
+  const values = labels.map(d => counts[d]);
+
+  new Chart(document.getElementById('timelineChart'), {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Articles',
+        data: values,
+        borderColor: '#4a90d9',
+        backgroundColor: 'rgba(74,144,217,.15)',
+        fill: true,
+        tension: 0.3,
+        pointRadius: 3,
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks: { maxTicksLimit: 10, maxRotation: 45 } },
+        y: { beginAtZero: true, ticks: { stepSize: 1 } }
+      }
+    }
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Source chart
+// ─────────────────────────────────────────────────────────────────────────────
+function renderSourceChart() {
+  const counts = {};
+  ALL_ARTICLES.forEach(a => {
+    counts[a.source_site] = (counts[a.source_site] || 0) + 1;
+  });
+  const sorted  = Object.entries(counts).sort((a,b) => b[1]-a[1]);
+  const labels  = sorted.map(e => e[0]);
+  const values  = sorted.map(e => e[1]);
+  const palette = ['#2d4a8a','#4a90d9','#5dade2','#7fb3d3','#a9cce3','#d4e6f1','#1a5276','#2980b9'];
+
+  new Chart(document.getElementById('sourceChart'), {
+    type: 'doughnut',
+    data: {
+      labels,
+      datasets: [{ data: values, backgroundColor: palette.slice(0, labels.length), borderWidth: 2 }]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 11 } } }
+      }
+    }
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Keyword bar chart (top 15)
+// ─────────────────────────────────────────────────────────────────────────────
+function renderKeywordChart() {
+  const top = KEYWORDS.slice(0, 15);
+  new Chart(document.getElementById('keywordChart'), {
+    type: 'bar',
+    data: {
+      labels: top.map(k => k.word),
+      datasets: [{
+        label: 'Count',
+        data: top.map(k => k.count),
+        backgroundColor: 'rgba(74,144,217,.75)',
+        borderColor: '#2d4a8a',
+        borderWidth: 1,
+        borderRadius: 4,
+      }]
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { beginAtZero: true },
+        y: { ticks: { font: { size: 11 } } }
+      }
+    }
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Keyword × Universe table
+// ─────────────────────────────────────────────────────────────────────────────
+function renderKwUniverseTable() {
+  const tbody = document.getElementById('kw-universe-tbody');
+  const top30 = KEYWORDS.slice(0, 30);
+
+  if (!top30.length) {
+    tbody.innerHTML = '<tr><td colspan="5" style="padding:12px;color:#999">No keyword data yet.</td></tr>';
+    return;
+  }
+
+  // Aggregate universe → matched keywords for the summary table
+  const universeCounts = {};
+
+  tbody.innerHTML = top30.map((kw, i) => {
+    const match = kw.universe_match || '—';
+    const score = kw.universe_score != null ? Math.round(kw.universe_score * 100) : null;
+    const badgeClass = score >= 70 ? 'badge-green' : score >= 40 ? 'badge-blue' : 'badge-amber';
+    const badgeLabel = score != null ? score + '%' : '—';
+
+    if (match !== '—') {
+      universeCounts[match] = (universeCounts[match] || 0) + 1;
+    }
+
+    return `<tr>
+      <td style="color:var(--muted);font-size:.75rem">${i+1}</td>
+      <td><strong>${esc(kw.word)}</strong></td>
+      <td>${kw.count}</td>
+      <td style="font-size:.82rem">${esc(match)}</td>
+      <td>${score != null ? `<span class="badge ${badgeClass}">${badgeLabel}</span>` : '—'}</td>
+    </tr>`;
+  }).join('');
+
+  // Universe summary table
+  const summaryTbody = document.getElementById('universe-summary-tbody');
+  const summaryRows  = Object.entries(universeCounts).sort((a,b) => b[1]-a[1]);
+  if (!summaryRows.length) {
+    summaryTbody.innerHTML = '<tr><td colspan="2" style="padding:12px;color:#999">No matches yet.</td></tr>';
+    return;
+  }
+  summaryTbody.innerHTML = summaryRows.map(([u, n]) =>
+    `<tr><td style="font-size:.82rem">${esc(u)}</td><td><span class="badge badge-blue">${n}</span></td></tr>`
+  ).join('');
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Article feed
+// ─────────────────────────────────────────────────────────────────────────────
+function populateFilters() {
+  const sources = [...new Set(ALL_ARTICLES.map(a => a.source_site))].sort();
+  const srcSel  = document.getElementById('source-filter');
+  sources.forEach(s => {
+    const o = document.createElement('option');
+    o.value = s; o.textContent = s;
+    srcSel.appendChild(o);
+  });
+
+  const dates  = [...new Set(ALL_ARTICLES.map(a => a.date_published).filter(Boolean))].sort().reverse();
+  const dateSel = document.getElementById('date-filter');
+  dates.forEach(d => {
+    const o = document.createElement('option');
+    o.value = d; o.textContent = d;
+    dateSel.appendChild(o);
+  });
+}
+
+function filterArticles() {
+  const q      = document.getElementById('search-input').value.toLowerCase();
+  const src    = document.getElementById('source-filter').value;
+  const date   = document.getElementById('date-filter').value;
+
+  const filtered = ALL_ARTICLES.filter(a => {
+    const matchQ = !q || (a.title||'').toLowerCase().includes(q) ||
+                         (a.body||'').toLowerCase().includes(q)  ||
+                         (a.author||'').toLowerCase().includes(q);
+    const matchS = !src  || a.source_site === src;
+    const matchD = !date || a.date_published === date;
+    return matchQ && matchS && matchD;
+  });
+
+  renderArticles(filtered);
+}
+
+function renderArticles(articles) {
+  const container = document.getElementById('articles-container');
+  document.getElementById('article-count').textContent =
+    `${articles.length.toLocaleString()} article${articles.length !== 1 ? 's' : ''}`;
+
+  if (!articles.length) {
+    container.innerHTML = '<div class="loading">No articles match your filters.</div>';
+    return;
+  }
+
+  container.innerHTML = articles
+    .slice()
+    .sort((a,b) => (b.date_published||'').localeCompare(a.date_published||''))
+    .map(a => `
+      <div class="article-card">
+        <div class="art-title">
+          <a href="${esc(a.url)}" target="_blank" rel="noopener">${esc(a.title || 'Untitled')}</a>
+        </div>
+        <div class="art-meta">
+          <span class="source-tag">${esc(a.source_site || '')}</span>
+          ${a.date_published ? `<span>📅 ${esc(a.date_published)}</span>` : ''}
+          ${a.author        ? `<span>✍️ ${esc(a.author)}</span>` : ''}
+        </div>
+        ${a.body ? `<div class="art-body">${esc(a.body.substring(0, 300))}</div>` : ''}
+      </div>`)
+    .join('');
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Helpers
+// ─────────────────────────────────────────────────────────────────────────────
+function esc(s) {
+  if (!s) return '';
+  return String(s)
+    .replace(/&/g,'&amp;')
+    .replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;');
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Boot
+// ─────────────────────────────────────────────────────────────────────────────
+loadData();
+</script>
+</body>
+</html>
