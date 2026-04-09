@@ -39,6 +39,25 @@
     header .sub { font-size: .8rem; color: #a0b0cc; margin-top: 2px; }
     #last-updated { font-size: .78rem; color: #8090b0; text-align: right; }
 
+    /* ── Run Scraper button ── */
+    .header-right { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+    #run-btn {
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      padding: 8px 16px;
+      font-size: .85rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background .15s, opacity .15s;
+      white-space: nowrap;
+    }
+    #run-btn:hover:not(:disabled) { background: #3a7fc8; }
+    #run-btn:disabled { opacity: .65; cursor: default; }
+    #run-status { font-size: .72rem; color: #8090b0; text-align: right; }
+    #token-reset { font-size: .68rem; color: #5070a0; cursor: pointer; text-decoration: underline; display: none; }
+
     /* ── Layout ── */
     main { max-width: 1400px; margin: 0 auto; padding: 24px 24px 48px; }
 
@@ -228,7 +247,12 @@
     <h1>📰 News Intelligence Dashboard</h1>
     <div class="sub">Local news monitoring · powered by Claude scraper</div>
   </div>
-  <div id="last-updated">Loading…</div>
+  <div class="header-right">
+    <div id="last-updated">Loading…</div>
+    <button id="run-btn" onclick="runScraper()">⚡ Run Scraper</button>
+    <div id="run-status"></div>
+    <span id="token-reset" onclick="resetToken()">reset token</span>
+  </div>
 </header>
 
 <main>
@@ -590,6 +614,95 @@ function esc(s) {
 // Boot
 // ─────────────────────────────────────────────────────────────────────────────
 loadData();
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Run Scraper via GitHub Actions workflow_dispatch
+// ─────────────────────────────────────────────────────────────────────────────
+const GH_OWNER    = 'knunnenkamp25';
+const GH_REPO     = 'news-dashboard';
+const GH_WORKFLOW = 'scrape.yml';
+
+function runScraper() {
+  let token = localStorage.getItem('gh_pat');
+
+  if (!token) {
+    token = prompt(
+      '🔑 Enter a GitHub Personal Access Token to trigger the scraper.\n\n' +
+      'Create one at: github.com/settings/tokens\n' +
+      '→ "Generate new token (classic)"\n' +
+      '→ Check the "workflow" scope\n\n' +
+      'Your token is stored only in this browser and never sent anywhere except GitHub.'
+    );
+    if (!token) return;
+    localStorage.setItem('gh_pat', token.trim());
+    document.getElementById('token-reset').style.display = 'inline';
+  }
+
+  const btn    = document.getElementById('run-btn');
+  const status = document.getElementById('run-status');
+  btn.disabled = true;
+  btn.textContent = '⏳ Queuing…';
+  status.textContent = '';
+
+  const url = `https://api.github.com/repos/${GH_OWNER}/${GH_REPO}/actions/workflows/${GH_WORKFLOW}/dispatches`;
+
+  fetch(url, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Accept': 'application/vnd.github+json',
+      'X-GitHub-Api-Version': '2022-11-28',
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ ref: 'main' }),
+  })
+  .then(r => {
+    if (r.status === 204) {
+      btn.textContent = '✅ Queued!';
+      status.textContent = 'Scraper running — refresh in ~2 min';
+      document.getElementById('token-reset').style.display = 'inline';
+      setTimeout(() => {
+        btn.disabled = false;
+        btn.textContent = '⚡ Run Scraper';
+        status.textContent = '';
+      }, 8000);
+    } else if (r.status === 401 || r.status === 403) {
+      localStorage.removeItem('gh_pat');
+      btn.disabled = false;
+      btn.textContent = '⚡ Run Scraper';
+      status.textContent = '❌ Bad token — try again';
+    } else if (r.status === 404) {
+      btn.disabled = false;
+      btn.textContent = '⚡ Run Scraper';
+      status.textContent = '❌ Workflow not found (push scrape.yml first)';
+    } else {
+      r.text().then(t => {
+        btn.disabled = false;
+        btn.textContent = '⚡ Run Scraper';
+        status.textContent = `❌ Error ${r.status}`;
+        console.error(t);
+      });
+    }
+  })
+  .catch(err => {
+    btn.disabled = false;
+    btn.textContent = '⚡ Run Scraper';
+    status.textContent = '❌ Network error';
+    console.error(err);
+  });
+}
+
+function resetToken() {
+  localStorage.removeItem('gh_pat');
+  document.getElementById('run-status').textContent = 'Token cleared.';
+  document.getElementById('token-reset').style.display = 'none';
+  setTimeout(() => { document.getElementById('run-status').textContent = ''; }, 3000);
+}
+
+// Show reset link if token already saved
+if (localStorage.getItem('gh_pat')) {
+  document.getElementById('token-reset').style.display = 'inline';
+}
 </script>
 </body>
 </html>
